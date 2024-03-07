@@ -8,12 +8,28 @@ import (
 	"strings"
 
 	"github.com/gorilla/websocket"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 var upgrader = websocket.Upgrader{}
 
-func main() {
+var (
+	accessCounter = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "apache_access_count",
+	}, []string{"site", "method", "status"})
 
+	accessBytesSent = promauto.NewHistogramVec(prometheus.HistogramOpts{
+		Name: "apache_access_bytes_sent",
+	}, []string{"site", "method", "status"})
+
+	accessDuration = promauto.NewHistogramVec(prometheus.HistogramOpts{
+		Name: "apache_access_duration_us",
+	}, []string{"site", "method", "status"})
+)
+
+func main() {
 	http.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
 		conn, err := upgrader.Upgrade(w, r, nil)
 		if err != nil {
@@ -38,6 +54,8 @@ func main() {
 		fmt.Fprint(w, "baal-daemon")
 	})
 
+	http.Handle("/metrics", promhttp.Handler())
+
 	http.ListenAndServe(":23873", nil)
 }
 
@@ -55,11 +73,16 @@ func parseLogLine(line string) {
 		return
 	}
 
-	requestLineSegs := strings.Split(segs[5], " ")
-	method := requestLineSegs[0]
-	status, _ := strconv.Atoi(segs[6])
+	requestLineSegs := strings.Split(segs[4], " ")
+	method := strings.ReplaceAll(requestLineSegs[0], "\"", "")
+	status := segs[5]
+	bytesSent, _ := strconv.Atoi(segs[6])
 	timeUs, _ := strconv.Atoi(segs[7])
 	site := segs[8]
 
-	fmt.Printf("Site: %s, Method: %s, Status: %d, Time: %dus\n", site, method, status, timeUs)
+	accessCounter.WithLabelValues(site, method, status).Inc()
+	accessBytesSent.WithLabelValues(site, method, status).Observe(float64(bytesSent))
+	accessDuration.WithLabelValues(site, method, status).Observe(float64(timeUs))
+
+	fmt.Printf("Site: %s, Method: %s, Status: %s, Time: %dus\n", site, method, status, timeUs)
 }
