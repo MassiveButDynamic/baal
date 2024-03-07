@@ -1,8 +1,8 @@
 package main
 
 import (
+	"bufio"
 	"flag"
-	"fmt"
 	"log"
 	"net/url"
 	"os"
@@ -13,6 +13,7 @@ import (
 )
 
 var addr = flag.String("addr", "localhost:23873", "baal daemon address")
+var site = flag.String("site", "", "apache sitename")
 
 func main() {
 	flag.Parse()
@@ -35,10 +36,9 @@ func main() {
 
 	msg := make(chan string, 1)
 	go func() {
-		for {
-			var s string
-			fmt.Scan(&s)
-			msg <- s
+		scanner := bufio.NewScanner(os.Stdin)
+		for scanner.Scan() {
+			msg <- scanner.Text() + "|" + *site
 		}
 	}()
 
@@ -48,7 +48,10 @@ loop:
 		case <-sigs:
 			break loop
 		case s := <-msg:
-			c.WriteMessage(websocket.TextMessage, []byte(s))
+			err := c.WriteMessage(websocket.TextMessage, []byte(s))
+			if err != nil {
+				break loop
+			}
 		}
 	}
 }
