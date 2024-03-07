@@ -1,6 +1,6 @@
 module github.com/MassiveButDynamic/baal
 
-go 1.21.5
+go 1.23
 
 require github.com/gorilla/websocket v1.5.1
 

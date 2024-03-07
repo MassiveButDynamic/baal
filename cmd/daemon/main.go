@@ -27,7 +27,7 @@ func main() {
 				break
 			}
 			input := string(msg)
-			log.Println(input)
+			log.Print(input)
 		}
 	})
 
